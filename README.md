@@ -76,10 +76,30 @@ PMI_THRESHOLD = 2.0
 ENTROPY_THRESHOLD = 0.5
 MERGE_MIN_FREQ = 30
 MERGE_MIN_PROB = 0.3
-ENABLE_IMAGE_EXPORT = False  # 服务端无 chromium 时建议 False
-OPENAI_API_KEY = ""          # 可选，用于 AI 锐评
+ENABLE_IMAGE_EXPORT = True   # 是否启用图片导出功能
+
+# OpenAI 配置（可选，用于 AI 锐评）
+OPENAI_API_KEY = ""          
 OPENAI_BASE_URL = ""
 OPENAI_MODEL = ""
+
+# AI 锐评配置
+AI_COMMENT_MODE = 'ask'      # 'always'(总是生成) / 'never'(从不) / 'ask'(每次询问)
+
+# 图片生成配置  
+IMAGE_GENERATION_MODE = 'ask' # 'always'(总是生成) / 'never'(从不) / 'ask'(每次询问)
+```
+
+### 配置说明
+- **AI_COMMENT_MODE**: 控制是否为热词生成AI锐评
+  - `'always'`: 每次都生成AI锐评（需配置 OpenAI API）
+  - `'never'`: 从不生成，使用默认文案
+  - `'ask'`: 每次运行时询问（默认）
+
+- **IMAGE_GENERATION_MODE**: 控制是否生成PNG图片报告
+  - `'always'`: 每次都生成图片（需安装 Playwright）
+  - `'never'`: 只生成HTML，不生成图片
+  - `'ask'`: 每次运行时询问（默认）
 ```
 
 ## 🖥️ 前端可调参数

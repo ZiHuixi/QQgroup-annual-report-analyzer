@@ -161,17 +161,40 @@
         }
         
         .header h1 {
-            font-size: clamp(14px, 5vw, 28px);
+            text-wrap: balance;
+            -webkit-text-wrap: balance; 
+            font-size: clamp(16px, 7.5vw, 38px);
             font-weight: 900;
             color: var(--white);
-            text-transform: uppercase;
-            letter-spacing: 4px;
-            text-shadow: 3px 3px 0 var(--black), 
-                         -1px -1px 0 var(--gold);
-            margin-bottom: 8px;
-            word-break: break-all;
-            white-space: nowrap;
-            overflow: hidden;
+            letter-spacing: 1.5px;
+            text-shadow: 3px 3px 0 var(--black), -1px -1px 0 var(--gold);
+            word-break: break-word;  
+            overflow-wrap: anywhere; 
+            white-space: normal;
+            display: inline-block;
+            max-width: 100%;
+            line-height: 1.35; 
+            text-align: center;
+            padding: 0 12px;
+        }
+        .header h1.short-title {
+            font-size: clamp(20px, 9vw, 44px);
+            letter-spacing: 3px; 
+        }
+
+        .header h1.medium-title {
+            font-size: clamp(18px, 8vw, 38px);
+        }
+
+        .header h1.long-title {
+            font-size: clamp(16px, 6vw, 32px);
+            letter-spacing: 1px;
+        }
+
+        .header h1.ultra-long-title {
+            font-size: clamp(14px, 5vw, 26px);
+            letter-spacing: 0.5px;
+            line-height: 1.4;
         }
         
         .header .subtitle {
@@ -959,7 +982,12 @@
         <div class="header">
             <div class="header-badge">Annual Report</div>
             <div class="header-star-group">★ ★ ★</div>
-            <h1>{{ chat_name }}</h1>
+            <h1 class="
+                {% if chat_name|length <= 6 %}short-title
+                {% elif chat_name|length <= 15 %}medium-title
+                {% elif chat_name|length <= 24 %}long-title
+                {% else %}ultra-long-title{% endif %}"
+            >{{ chat_name }}</h1>
             <div class="subtitle">年度报告</div>
             <div class="header-stats">
                 <div class="stat-box">

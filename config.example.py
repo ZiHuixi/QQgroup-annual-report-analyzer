@@ -34,8 +34,16 @@ ENABLE_IMAGE_EXPORT = True
 FILTER_BOT_MESSAGES = True  # 是否过滤QQ机器人消息
 
 # ============ OpenAI 配置 ============
-OPENAI_API_KEY = "" 
-OPENAI_BASE_URL = "" 
-OPENAI_MODEL = "" 
+OPENAI_API_KEY = ""  # 替换为你的API Key，如 "sk-..."
+OPENAI_BASE_URL = ""  # 如 "https://api.openai.com/v1" 或代理地址
+OPENAI_MODEL = ""  # 如 "gpt-4", "gpt-3.5-turbo" 等
+
+# ============ AI锐评配置 ============
+# 可选值: 'always' (总是生成), 'never' (从不生成), 'ask' (每次询问，默认)
+AI_COMMENT_MODE = 'ask'
+
+# ============ 图片生成配置 ============
+# 可选值: 'always' (总是生成), 'never' (从不生成), 'ask' (每次询问，默认)
+IMAGE_GENERATION_MODE = 'ask'
 
 STOPWORDS = set([])

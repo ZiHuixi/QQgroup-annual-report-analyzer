@@ -57,6 +57,38 @@ def get_avatar_url(uin):
     return f"https://q1.qlogo.cn/g?b=qq&nk={uin}&s=640"
 
 
+def clean_ai_response(text):
+    # 清理AI响应中的思考过程标记
+    if not text:
+        return text
+    
+    import re
+    
+    # 移除常见的思考标记模式
+    patterns = [
+        r'\*Thinking[:\.].*?\*.*?(?=\n\n|\Z)', 
+        r'\*\*Examining.*?\*\*.*?(?=\n\n|\Z)',  
+        r'<thinking>.*?</thinking>',  
+        r'【思考】.*?【/思考】',  
+        r'\[思考过程\].*?(?=\n\n|\Z)',  
+    ]
+    
+    cleaned = text
+    for pattern in patterns:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    
+    # 如果整段都是thinking内容，尝试提取最后一行作为结论
+    if cleaned.strip() == '' or len(cleaned.strip()) < 5:
+        lines = [l.strip() for l in text.split('\n') if l.strip()]
+        # 尝试找到不是thinking标记的最后几行
+        for line in reversed(lines):
+            if not any(marker in line.lower() for marker in ['thinking', 'examining', '思考', 'analysis']):
+                if len(line) > 5 and len(line) < 100:  # 合理长度
+                    return line
+    
+    return cleaned.strip()
+
+
 class AIWordSelector:
     """AI智能选词器"""
     
@@ -146,7 +178,14 @@ class AIWordSelector:
                 temperature=0.7
             )
             
-            result = response.choices[0].message.content.strip()
+            # 清理响应中的思考过程
+            raw_result = response.choices[0].message.content.strip()
+            result = clean_ai_response(raw_result)
+            
+            # 如果清理后为空，使用原始结果
+            if not result:
+                result = raw_result
+            
             print(f"   AI返回: {result}")
             
             # 解析序号
@@ -254,7 +293,16 @@ class AICommentGenerator:
                 max_tokens=100,
                 temperature=0.9
             )
-            return response.choices[0].message.content.strip()
+            
+            # 清理响应中的思考过程
+            raw_content = response.choices[0].message.content.strip()
+            cleaned_content = clean_ai_response(raw_content)
+            
+            # 如果清理后为空或太短，使用备用
+            if not cleaned_content or len(cleaned_content) < 5:
+                return self._fallback_comment(word)
+            
+            return cleaned_content
         except Exception as e:
             print(f"   ⚠️ AI生成失败({word}): {e}")
             return self._fallback_comment(word)
@@ -714,21 +762,21 @@ def interactive_generate(json_path=None, analyzer=None):
     """交互式选词生成"""
     gen = ImageGenerator(analyzer=analyzer, json_path=json_path)
     gen.enabled = True
-    return gen.generate(auto_select=False, enable_ai=True)
+    return gen.generate(auto_select=False, enable_ai=True, generate_image=True)
 
 
 def auto_generate(json_path=None, analyzer=None):
     """自动选择前10个生成"""
     gen = ImageGenerator(analyzer=analyzer, json_path=json_path)
     gen.enabled = True
-    return gen.generate(auto_select=True, enable_ai=False)
+    return gen.generate(auto_select=True, enable_ai=True, generate_image=True)
 
 
 def ai_generate(json_path=None, analyzer=None):
     """AI智能选词生成"""
     gen = ImageGenerator(analyzer=analyzer, json_path=json_path)
     gen.enabled = True
-    return gen.generate(ai_select=True, enable_ai=True)
+    return gen.generate(ai_select=True, enable_ai=True, generate_image=True)
 
 
 if __name__ == '__main__':

@@ -89,15 +89,34 @@ def main():
         else:
             img_gen = ImageGenerator(analyzer)
             
+            # 确定是否启用AI锐评
+            if cfg.AI_COMMENT_MODE == 'always':
+                enable_ai = True
+            elif cfg.AI_COMMENT_MODE == 'never':
+                enable_ai = False
+            else:  # 'ask'
+                ai_choice = input("\n🤖 是否生成AI锐评? [Y/n]: ").strip().lower()
+                enable_ai = ai_choice in ('', 'y', 'yes')
+            
+            # 确定是否生成图片
+            if cfg.IMAGE_GENERATION_MODE == 'always':
+                generate_image = True
+            elif cfg.IMAGE_GENERATION_MODE == 'never':
+                generate_image = False
+            else:  # 'ask'
+                img_choice = input("🖼️ 是否生成图片报告? [Y/n]: ").strip().lower()
+                generate_image = img_choice in ('', 'y', 'yes')
+            
+            # 根据选择的模式生成报告
             if choice == '3':
                 # AI 智能选词模式
-                html_path, img_path = img_gen.generate(ai_select=True, enable_ai=True)
+                html_path, img_path = img_gen.generate(ai_select=True, enable_ai=enable_ai, generate_image=generate_image)
             elif choice == '2':
                 # 自动选择前10
-                html_path, img_path = img_gen.generate(auto_select=True, enable_ai=False)
+                html_path, img_path = img_gen.generate(auto_select=True, enable_ai=enable_ai, generate_image=generate_image)
             else:
                 # 交互式选择（默认）
-                html_path, img_path = img_gen.generate(auto_select=False, enable_ai=True)
+                html_path, img_path = img_gen.generate(auto_select=False, enable_ai=enable_ai, generate_image=generate_image)
             
             if html_path:
                 print(f"\n📄 HTML报告: {html_path}")
