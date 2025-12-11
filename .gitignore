@@ -26,6 +26,12 @@ env/
 .venv/
 .ENV/
 
+# runtime / build / deps
+frontend/node_modules/
+frontend/dist/
+runtime_outputs/
+playwright/.cache/
+
 
 .idea/
 .vscode/
