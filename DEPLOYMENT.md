@@ -6,30 +6,21 @@
 
 1. **前端** (Vue 3 + Vite)：提供用户上传、选词、查看历史等交互界面
 2. **后端** (Flask)：处理文件上传、分析、数据库操作
-3. **阿里云 OSS**：存储用户上传的 JSON 文件和生成的报告
-4. **MySQL 数据库**：存储报告元数据和用户选择的词汇
+3. **MySQL 数据库**：存储报告元数据和用户选择的词汇
 
 ## 工作流程
 
-**生产环境（启用 OSS）：**
+**完整流程：**
 
 1. 用户在前端选择 QQ 群聊 JSON 文件
-2. 前端直接上传文件到阿里云 OSS
-3. 后端从 OSS 下载文件到本地临时目录
-4. 后端分析 JSON 文件，提取热词和统计数据
-5. 分析完成后删除 OSS 和本地的临时文件
-6. 将分析结果保存到 MySQL 数据库，返回 report_id 和热词列表给前端
-7. 用户从热词列表中选择想要展示的词汇
-8. 后端根据用户选择生成 AI 点评
-9. 将完整报告数据保存到 MySQL 数据库
-10. 前端动态渲染报告，用户可随时查看历史记录
-
-**开发环境（SKIP_OSS=1）：**
-
-1. 用户上传文件到后端
-2. 后端直接保存到本地临时目录
-3. 后端分析并删除临时文件
-4. 后续流程与生产环境相同
+2. 前端上传文件到后端
+3. 后端保存到本地临时目录并分析 JSON 文件，提取热词和统计数据
+4. 分析完成后删除本地临时文件
+5. 将分析结果保存到 MySQL 数据库，返回 report_id 和热词列表给前端
+6. 用户从热词列表中选择想要展示的词汇
+7. 后端根据用户选择生成 AI 点评
+8. 将完整报告数据保存到 MySQL 数据库
+9. 前端动态渲染报告，用户可随时查看历史记录
 
 ## 环境要求
 
@@ -38,7 +29,6 @@
 - Python 3.8+
 - Node.js 16+
 - MySQL 5.7+ 或 8.0+
-- 阿里云 OSS 存储桶
 
 ### 系统依赖
 
@@ -48,17 +38,7 @@
 
 ## 部署步骤
 
-### 1. 准备阿里云 OSS
-
-1. 登录阿里云控制台
-2. 创建 OSS 存储桶（Bucket）
-3. 记录以下信息：
-   - AccessKey ID
-   - AccessKey Secret
-   - Endpoint（如：oss-cn-hangzhou.aliyuncs.com）
-   - Bucket 名称
-
-### 2. 准备 MySQL 数据库
+### 1. 准备 MySQL 数据库
 
 ```bash
 # 登录 MySQL
@@ -68,14 +48,14 @@ mysql -u root -p
 CREATE DATABASE qq_reports CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 3. 克隆项目
+### 2. 克隆项目
 
 ```bash
 git clone https://github.com/ZiHuixi/QQgroup-annual-report-analyzer.git
 cd QQgroup-annual-report-analyzer
 ```
 
-### 4. 配置后端
+### 3. 配置后端
 
 ```bash
 cd backend
@@ -90,14 +70,6 @@ nano .env
 `.env` 配置示例：
 
 ```ini
-# 阿里云 OSS 配置
-OSS_ACCESS_KEY_ID=your_access_key_id
-OSS_ACCESS_KEY_SECRET=your_access_key_secret
-OSS_ENDPOINT=oss-cn-hangzhou.aliyuncs.com
-OSS_BUCKET_NAME=your_bucket_name
-OSS_JSON_PREFIX=qq-reports/json/
-OSS_RESULT_PREFIX=qq-reports/results/
-
 # MySQL 配置
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
@@ -112,7 +84,7 @@ FLASK_ENV=production
 FLASK_PORT=5000
 ```
 
-### 5. 安装后端依赖
+### 4. 安装后端依赖
 
 ```bash
 # 创建虚拟环境（推荐）
@@ -128,7 +100,7 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
-### 6. 初始化数据库
+### 5. 初始化数据库
 
 ```bash
 # 运行数据库初始化脚本
@@ -146,7 +118,7 @@ python init_db.py
 ✅ 数据库初始化完成！
 ```
 
-### 7. 启动后端服务
+### 6. 启动后端服务
 
 ```bash
 # 开发模式
@@ -157,7 +129,7 @@ pip install gunicorn
 gunicorn -w 4 -b 0.0.0.0:5000 app:app
 ```
 
-### 8. 配置前端
+### 7. 配置前端
 
 ```bash
 cd ../frontend
@@ -176,7 +148,7 @@ nano .env
 VITE_API_BASE=http://your-server-ip:5000/api
 ```
 
-### 9. 安装前端依赖并构建
+### 8. 安装前端依赖并构建
 
 ```bash
 # 安装依赖
@@ -189,7 +161,7 @@ npm run dev
 npm run build
 ```
 
-### 10. 部署前端（生产环境）
+### 9. 部署前端（生产环境）
 
 #### 方案 A：使用 Nginx
 
@@ -258,10 +230,6 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - OSS_ACCESS_KEY_ID=${OSS_ACCESS_KEY_ID}
-      - OSS_ACCESS_KEY_SECRET=${OSS_ACCESS_KEY_SECRET}
-      - OSS_ENDPOINT=${OSS_ENDPOINT}
-      - OSS_BUCKET_NAME=${OSS_BUCKET_NAME}
       - MYSQL_HOST=mysql
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     depends_on:
@@ -291,7 +259,7 @@ volumes:
   mysql_data:
 ```
 
-### 11. 使用进程管理器（生产环境）
+### 10. 使用进程管理器（生产环境）
 
 #### 使用 Supervisor
 
@@ -450,20 +418,14 @@ DELETE /api/reports/{report_id}
 
 ### 后端启动失败
 
-1. **OSS 配置错误**
-   ```
-   检查 .env 文件中的 OSS 配置是否正确
-   测试 AccessKey 是否有效
-   ```
-
-2. **数据库连接失败**
+1. **数据库连接失败**
    ```
    检查 MySQL 服务是否运行
    检查用户名密码是否正确
    检查数据库是否已创建
    ```
 
-3. **端口占用**
+2. **端口占用**
    ```bash
    # 查看端口占用
    netstat -tuln | grep 5000
@@ -498,7 +460,6 @@ DELETE /api/reports/{report_id}
 2. **敏感信息保护**：
    - 不要提交 .env 文件到代码仓库
    - 使用强密码
-   - 定期更换 AccessKey
 
 3. **数据库安全**：
    - 不要使用 root 账户
@@ -517,7 +478,6 @@ DELETE /api/reports/{report_id}
 
 1. **定期备份**：
    - MySQL 数据库
-   - OSS 存储桶
 
 2. **日志管理**：
    ```bash

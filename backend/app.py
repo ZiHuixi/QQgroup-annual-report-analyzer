@@ -3,7 +3,7 @@
 """
 Flask 后端：QQ群年度报告分析器线上版
 正确流程：
-1. 用户上传 → 2. 临时保存（OSS或本地） → 3. 后台下载分析 → 4. 删除临时文件
+1. 用户上传 → 2. 临时保存 → 3. 后台分析 → 4. 删除临时文件
 5. 用户选词 → 6. AI锐评 → 7. 保存MySQL（只存关键数据） → 8. 前端动态渲染
 """
 
@@ -19,8 +19,6 @@ from dotenv import load_dotenv
 # 加载环境变量
 load_dotenv()
 
-os.environ['SKIP_OSS'] = '1'
-
 # 将根目录加入路径
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 import sys
@@ -31,7 +29,6 @@ import config
 import analyzer as analyzer_mod
 from image_generator import ImageGenerator
 
-from backend.oss_service import OSSService
 from backend.db_service import DatabaseService
 
 
@@ -53,16 +50,10 @@ app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-please-
 
 # 初始化服务
 try:
-    if os.getenv('SKIP_OSS') != '1':
-        oss_service = OSSService()
-    else:
-        oss_service = None
-        print("⚠️  OSS 功能已禁用，使用本地临时存储")
     db_service = DatabaseService()
     db_service.init_database()
 except Exception as e:
     print(f"⚠️  服务初始化警告: {e}")
-    oss_service = None
     db_service = None
 
 
@@ -98,7 +89,6 @@ def health():
     return jsonify({
         "ok": True,
         "services": {
-            "oss": oss_service is not None,
             "database": db_service is not None
         }
     })
@@ -140,18 +130,8 @@ def upload_and_analyze():
     file.save(temp_path)
 
     try:
-        # 如果启用OSS：上传→获取URL→下载回来分析
-        if oss_service:
-            original_filename = file.filename or "chat.json"
-            oss_key = oss_service.upload_json(temp_path, original_filename)
-            # 这里可以选择从OSS下载回来，或直接使用本地文件
-            # 为简化流程，直接使用本地文件
-            local_file = temp_path
-        else:
-            local_file = temp_path
-        
         # 解析并分析JSON
-        data = json.load(open(local_file, encoding="utf-8-sig"))
+        data = json.load(open(temp_path, encoding="utf-8-sig"))
         analyzer = analyzer_mod.ChatAnalyzer(data)
         analyzer.analyze()
         report = analyzer.export_json()
@@ -169,7 +149,7 @@ def upload_and_analyze():
                 auto_mode=True
             )
             # 删除临时文件
-            cleanup_temp_files(temp_path, oss_service, oss_key if oss_service else None)
+            cleanup_temp_files(temp_path)
             return result
         
         # 手动选词模式：返回热词列表，暂存分析结果
@@ -188,7 +168,7 @@ def upload_and_analyze():
         import traceback
         traceback.print_exc()
         # 清理临时文件
-        cleanup_temp_files(temp_path, oss_service, None)
+        cleanup_temp_files(temp_path)
         return jsonify({"error": f"分析失败: {exc}"}), 500
 
 
@@ -237,9 +217,9 @@ def finalize_report_endpoint():
         )
         
         # 清理临时文件
-        cleanup_temp_files(result_temp_path, None, None)
+        cleanup_temp_files(result_temp_path)
         if os.path.exists(original_json_path):
-            cleanup_temp_files(original_json_path, None, None)
+            cleanup_temp_files(original_json_path)
         
         return result
     except Exception as exc:
@@ -306,21 +286,13 @@ def finalize_report(report_id: str, analyzer, selected_words: List[str],
         return jsonify({"error": f"最终化失败: {exc}"}), 500
 
 
-def cleanup_temp_files(file_path: str, oss_service, oss_key: str = None):
+def cleanup_temp_files(file_path: str):
     """清理临时文件"""
     try:
         # 删除本地临时文件
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
             print(f"🗑️ 已删除临时文件: {file_path}")
-        
-        # 删除OSS文件
-        if oss_service and oss_key:
-            try:
-                oss_service.delete_file(oss_key)
-                print(f"🗑️ 已删除OSS文件: {oss_key}")
-            except:
-                pass
     except Exception as e:
         print(f"⚠️ 清理临时文件失败: {e}")
 

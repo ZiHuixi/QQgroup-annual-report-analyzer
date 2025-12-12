@@ -5,6 +5,5 @@ jieba>=0.42.1
 openai>=1.55.3
 httpx>=0.27.0
 playwright>=1.40.0
-oss2>=2.18.0
 pymysql>=1.1.0
 python-dotenv>=1.0.0

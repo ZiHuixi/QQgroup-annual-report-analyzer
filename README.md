@@ -17,7 +17,6 @@
 - ⚙️ **高度可定制**：丰富的配置参数，满足不同需求
 
 ### 🌐 线上版新功能
-- ☁️ **云存储集成**：自动上传到阿里云 OSS
 - 🎯 **交互式选词**：用户可从热词列表中自主选择展示词汇
 - 💾 **数据持久化**：MySQL 数据库永久存储报告
 - 📜 **历史记录管理**：随时查看、搜索、删除历史报告
@@ -68,7 +67,7 @@ python main.py
 # 1. 配置后端
 cd backend
 cp .env.example .env
-# 编辑 .env 填入数据库和 OSS 配置
+# 编辑 .env 填入数据库配置
 
 # 2. 安装依赖
 pip install -r requirements.txt
@@ -98,12 +97,12 @@ npm run dev
        │ HTTP/REST API
 ┌──────▼──────┐
 │  后端 Flask  │ ← 分析引擎、API 服务
-└──┬────────┬─┘
-   │        │
-   ▼        ▼
-┌─────┐  ┌─────┐
-│ OSS │  │MySQL│ ← 云存储 + 数据库
-└─────┘  └─────┘
+└──────┬──────┘
+       │
+       ▼
+   ┌─────┐
+   │MySQL│ ← 数据库
+   └─────┘
 ```
 
 ### 工作流程
@@ -111,9 +110,9 @@ npm run dev
 **线上版完整流程：**
 
 1. 用户在前端选择 QQ 群聊 JSON 文件
-2. 前端直接上传文件到阿里云 OSS（生产环境）或后端（开发环境）
-3. 后端从 OSS 下载文件到本地临时目录进行分析
-4. 后端提取热词和统计数据，分析完成后删除 OSS 和本地临时文件
+2. 前端上传文件到后端
+3. 后端分析文件并提取热词和统计数据
+4. 分析完成后删除本地临时文件
 5. 将分析结果保存到 MySQL 数据库，返回热词列表
 6. 用户从热词列表中选择想要展示的词汇
 7. 后端根据选词生成 AI 点评
@@ -195,12 +194,6 @@ IMAGE_GENERATION_MODE = 'ask' # 图片生成模式
 ### 线上版配置（.env）
 
 ```ini
-# 阿里云 OSS
-OSS_ACCESS_KEY_ID=your_key
-OSS_ACCESS_KEY_SECRET=your_secret
-OSS_ENDPOINT=oss-cn-hangzhou.aliyuncs.com
-OSS_BUCKET_NAME=your_bucket
-
 # MySQL 数据库
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
@@ -237,9 +230,8 @@ FLASK_PORT=5000
 - OpenAI API（可选）
 
 ### 线上版
-- **后端**：Flask, pymysql, oss2, python-dotenv
+- **后端**：Flask, pymysql, python-dotenv
 - **前端**：Vue 3, Vite, Axios
-- **存储**：阿里云 OSS
 - **数据库**：MySQL 5.7+
 
 ## 📝 开发计划
@@ -251,7 +243,6 @@ FLASK_PORT=5000
 - [x] PNG 图片导出
 - [x] AI 智能点评
 - [x] Web 版本开发
-- [x] 云存储集成
 - [x] 用户选词功能
 - [x] 历史记录管理
 - [ ] 用户认证系统
