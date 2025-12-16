@@ -117,7 +117,6 @@ setup_frontend() {
         npm run dev
         
         # 返回到项目根目录
-        cd ..
     else
         print_error "未找到 frontend 目录"
         exit 1
