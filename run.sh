@@ -24,7 +24,7 @@ print_error() {
 
 # 检查是否在项目根目录
 check_root_dir() {
-    if [[ ! -f "config.example.py" ]] && [[ ! -d "backend" ]] && [[ ! -d "frontend" ]]; then
+    if [[ ! -f "config.example.py" ]] || [[ ! -d "backend" ]] || [[ ! -d "frontend" ]]; then
         print_error "请确保在项目根目录下运行此脚本！"
         print_error "当前目录: $(pwd)"
         exit 1
