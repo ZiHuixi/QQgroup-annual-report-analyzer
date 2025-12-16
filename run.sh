@@ -132,7 +132,7 @@ cleanup() {
         BACKEND_PID=$(cat backend.pid)
         if ps -p $BACKEND_PID > /dev/null; then
             print_message "停止后端服务 (PID: $BACKEND_PID)..."
-            kill $BACKEND_PID
+            kill $BACKEND_PID >/dev/null 2>&1
             rm backend.pid
         fi
     fi
