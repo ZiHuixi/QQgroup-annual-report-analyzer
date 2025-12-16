@@ -111,7 +111,7 @@ setup_frontend() {
         
         # 启动前端开发服务器
         print_message "正在启动前端开发服务器..."
-        print_message "请在新终端中查看前端日志，当前终端可以继续使用..."
+        print_message "前端日志将在当前终端显示，按 Ctrl+C 可停止前端开发服务器..."
         
         # 在前台运行前端，这样用户可以Ctrl+C停止
         npm run dev
