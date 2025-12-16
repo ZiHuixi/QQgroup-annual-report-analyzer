@@ -54,7 +54,7 @@ setup_backend() {
         # 检查并安装Python依赖
         if [[ -f "requirements.txt" ]]; then
             print_message "正在安装Python依赖..."
-            pip install -r requirements.txt
+            python3 -m pip install -r requirements.txt
             if [[ $? -ne 0 ]]; then
                 print_warning "Python依赖安装可能有问题，请检查"
             fi
