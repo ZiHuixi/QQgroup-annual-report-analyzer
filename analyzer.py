@@ -8,8 +8,6 @@ import jieba
 from collections import Counter, defaultdict
 import config as cfg
 from utils import (
-    extract_emojis,
-    is_emoji,
     parse_timestamp,
     parse_datetime,
     clean_text,
@@ -99,7 +97,7 @@ class ChatAnalyzer:
     def _filter_messages_by_time(self):
         """根据配置的时间范围过滤消息"""
         if cfg.MESSAGE_START_DATE is None and cfg.MESSAGE_END_DATE is None:
-            return  # 无时间限制，不过滤
+            return
         
         from datetime import datetime
         
@@ -387,11 +385,8 @@ class ChatAnalyzer:
                 continue
             
             words = list(jieba.cut(cleaned))
-            emojis = extract_emojis(cleaned)
-            words = [w for w in words if not is_emoji(w)]  # 新增：从words中去掉emoji
-            all_tokens = words + emojis
             
-            for word in all_tokens:
+            for word in words:
                 word = word.strip()
                 if not word:
                     continue
@@ -425,21 +420,72 @@ class ChatAnalyzer:
             content = msg.get('content', {})
             text = content.get('text', '') if isinstance(content, dict) else ''
             timestamp = msg.get('timestamp', '')
+            raw = msg.get('rawMessage', {})
+            elements = raw.get('elements', [])
             
             self.user_msg_count[sender_uin] += 1
             clean = clean_text(text)
             self.user_char_count[sender_uin] += len(clean)
             
-            # 图片检测（排除gif）
-            if '[图片:' in text:
-                if '.gif' not in text.lower():
-                    self.user_image_count[sender_uin] += 1
+            has_image = False
+            is_emoji_image = False
+            has_forward = False
+            has_link = False
+            emoji_count_from_elements = 0
             
-            # 转发检测
-            if '[合并转发:' in text:
+            for elem in elements:
+                elem_type = elem.get('elementType')
+                
+                # 跳过回复元素
+                if elem_type == 7:
+                    continue
+                
+                # 图片元素 
+                if elem_type == 2:
+                    has_image = True
+                    pic_elem = elem.get('picElement', {})
+                    summary = pic_elem.get('summary', '')
+                    # 检查是否为表情图片
+                    if summary and summary.startswith('[') and summary.endswith(']'):
+                        is_emoji_image = True
+                        emoji_count_from_elements += 1
+                
+                # 文本元素
+                elif elem_type == 1:
+                    text_elem = elem.get('textElement', {})
+                    
+                    # @统计
+                    at_type = text_elem.get('atType', 0)
+                    at_uid = text_elem.get('atUid', '')
+                    if at_type > 0 and at_uid and at_uid != '0':
+                        self.user_at_count[sender_uin] += 1
+                        self.user_ated_count[at_uid] += 1
+                    
+                    # 链接统计（文本中的链接）
+                    if not has_link:
+                        text_content = text_elem.get('content', '')
+                        if re.search(r'https?://', text_content):
+                            has_link = True
+                
+                # 链接元素
+                elif elem_type == 10:
+                    has_link = True
+                
+                # 转发元素
+                elif elem_type == 16 and 'multiForwardMsgElement' in elem:
+                    has_forward = True
+            
+            # ========== 图片统计（content.resources 中有图片 且 非表情） ==========
+            resources = content.get('resources', []) if isinstance(content, dict) else []
+            has_image_resource = any(res.get('type') == 'image' for res in resources)
+            if has_image_resource and not is_emoji_image:
+                self.user_image_count[sender_uin] += 1
+            
+            # ========== 转发统计 ==========
+            if has_forward:
                 self.user_forward_count[sender_uin] += 1
             
-            # 回复统计
+            # ========== 回复统计 ==========
             reply_info = content.get('reply') if isinstance(content, dict) else None
             if reply_info:
                 self.user_reply_count[sender_uin] += 1
@@ -448,31 +494,18 @@ class ChatAnalyzer:
                     target_uin = self.msgid_to_sender[ref_msg_id]
                     self.user_replied_count[target_uin] += 1
             
-            # @统计
-            raw = msg.get('rawMessage', {})
-            elements = raw.get('elements', [])
-            for elem in elements:
-                if elem.get('elementType') == 1:
-                    text_elem = elem.get('textElement', {})
-                    at_type = text_elem.get('atType', 0)
-                    at_uid = text_elem.get('atUid', '')
-                    if at_type > 0 and at_uid and at_uid != '0':
-                        self.user_at_count[sender_uin] += 1
-                        self.user_ated_count[at_uid] += 1
-            
-            # 表情统计（包括emoji、[表情:]、gif）
-            emojis = extract_emojis(clean)
-            gif_count = text.lower().count('.gif')
-            bracket_emoji_count = text.count('[表情:')
-            emoji_count = len(emojis) + bracket_emoji_count + gif_count
+            # ========== 表情统计 ==========
+            # content.emojis 中的QQ表情
+            emojis = content.get('emojis', []) if isinstance(content, dict) else []
+            emoji_count = len(emojis) + emoji_count_from_elements
             if emoji_count > 0:
                 self.user_emoji_count[sender_uin] += emoji_count
             
-            # 链接统计
-            if '[链接:' in text or re.search(r'https?://', text):
+            # ========== 链接统计 ==========
+            if has_link:
                 self.user_link_count[sender_uin] += 1
             
-            # 时段统计
+            # ========== 时段统计 ==========
             hour = parse_timestamp(timestamp)
             if hour is not None:
                 self.hour_distribution[hour] += 1
@@ -481,20 +514,21 @@ class ChatAnalyzer:
                 if hour in cfg.EARLY_BIRD_HOURS:
                     self.user_morning_count[sender_uin] += 1
             
-            # 复读统计（用清理后文本，且内容要有意义）
+            # ========== 复读统计 ==========
             if clean and len(clean) >= 2:
                 if clean == prev_clean and sender_uin != prev_sender:
                     self.user_repeat_count[sender_uin] += 1
             
-            prev_clean = clean if clean else prev_clean  # 空消息不更新
+            prev_clean = clean if clean else prev_clean
             prev_sender = sender_uin
         
-        # 计算人均字数
+        # ========== 计算人均字数（保留1位小数） ==========
         for uin in self.user_msg_count:
             msg_count = self.user_msg_count[uin]
             char_count = self.user_char_count[uin]
             if msg_count >= 10:
-                self.user_char_per_msg[uin] = char_count / msg_count
+                self.user_char_per_msg[uin] = round(char_count / msg_count, 1)
+
 
     def _filter_results(self):
         """过滤结果"""
@@ -515,20 +549,17 @@ class ChatAnalyzer:
             
             # 单字特殊处理
             if len(word) == 1:
-                if is_emoji(word):
-                    pass  # emoji保留
+                # 单个符号跳过（但数字/字母走单字统计）
+                if word in string.punctuation or word in '，。！？；：、""''（）【】':
+                    continue
+                # 其他单字（数字/字母/汉字）走独立性检查
+                stats = self.single_char_stats.get(word)
+                if stats:
+                    total, indep, ratio = stats
+                    if ratio < cfg.SINGLE_MIN_SOLO_RATIO or indep < cfg.SINGLE_MIN_SOLO_COUNT:
+                        continue
                 else:
-                    # 单个符号跳过（但数字/字母走单字统计）
-                    if word in string.punctuation or word in '，。！？；：、""''（）【】':
-                        continue
-                    # 其他单字（数字/字母/汉字）走独立性检查
-                    stats = self.single_char_stats.get(word)
-                    if stats:
-                        total, indep, ratio = stats
-                        if ratio < cfg.SINGLE_MIN_SOLO_RATIO or indep < cfg.SINGLE_MIN_SOLO_COUNT:
-                            continue
-                    else:
-                        continue
+                    continue
                         
             filtered_freq[word] = freq
         
