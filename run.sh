@@ -37,8 +37,12 @@ setup_backend() {
     
     # 复制配置文件
     if [[ -f "config.example.py" ]]; then
-        cp config.example.py config.py
-        print_message "配置文件已复制: config.example.py -> config.py"
+        if [[ ! -f "config.py" ]]; then
+            cp config.example.py config.py
+            print_message "配置文件已复制: config.example.py -> config.py"
+        else
+            print_message "配置文件 config.py 已存在，未覆盖。"
+        fi
     else
         print_warning "未找到 config.example.py 文件"
     fi
