@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # TODO 此脚本只用于启动前后端服务, 不考虑端口是否占用
-# 确保脚本有执行权限: chmod +x start_project.sh
+# 确保脚本有执行权限: chmod +x run.sh
 
 # 设置颜色输出
 RED='\033[0;31m'
