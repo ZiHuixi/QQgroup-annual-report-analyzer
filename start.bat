@@ -261,7 +261,8 @@ echo 正在启动后端服务...
 echo    使用虚拟环境 Python：%VENV_PYTHON%
 echo    后端启动命令：%VENV_PYTHON% backend\app.py
 
-start "QQ群年度报告-后端" cmd /k "cd /d %ROOT_DIR%backend && \"%VENV_PYTHON%\" app.py"
+REM 在新 cmd 窗口中切到 backend 目录，使用相对路径调用 venv Python
+start "QQ群年度报告-后端" cmd /k "cd /d %ROOT_DIR%backend && ..\venv\Scripts\python.exe app.py"
 
 ::: 等待后端完全启动（健康检查）
 echo 等待后端服务就绪...
