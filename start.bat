@@ -163,10 +163,18 @@ if errorlevel 1 (
     echo ⚠️  使用清华源安装失败，尝试官方源...
     "%VENV_PIP%" install -r backend\requirements.txt
     if errorlevel 1 (
-        echo ❌ 错误：依赖包安装失败
-        echo    请检查网络连接或手动运行：%VENV_PIP% install -r backend\requirements.txt
-        pause
-        exit /b 1
+        echo ⚠️  依赖安装失败，尝试分步安装（可能是 jieba_fast 编译失败）...
+        echo    1) 先安装核心依赖（不包含 jieba_fast）
+        "%VENV_PIP%" install flask flask-cors flask-limiter gunicorn jinja2 openai httpx playwright pymysql python-dotenv requests ijson
+        echo    2) 再尝试安装 jieba_fast（如果失败将自动回退 jieba）
+        "%VENV_PIP%" install jieba_fast -i https://pypi.tuna.tsinghua.edu.cn/simple >nul 2>&1
+        if errorlevel 1 (
+            echo    ⚠️  jieba_fast 安装失败，自动回退到 jieba（标准版）
+            "%VENV_PIP%" install jieba -i https://pypi.tuna.tsinghua.edu.cn/simple >nul 2>&1
+            if errorlevel 1 (
+                "%VENV_PIP%" install jieba
+            )
+        )
     )
 )
 
