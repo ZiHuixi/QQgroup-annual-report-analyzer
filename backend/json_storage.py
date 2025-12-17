@@ -125,6 +125,53 @@ class JSONStorageService:
             logger.error(f"❌ 获取报告失败: {e}")
             return None
     
+    def create_personal_report(self, report_id: str, user_name: str, chat_name: str,
+                              report_data: Dict, user_id: str = 'anonymous') -> bool:
+        """保存个人报告"""
+        try:
+            personal_data = {
+                "report_id": report_id,
+                "user_name": user_name,
+                "chat_name": chat_name,
+                "user_id": user_id,
+                "report_data": report_data,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            personal_dir = self.storage_dir / "personal_reports"
+            personal_dir.mkdir(exist_ok=True)
+            
+            report_file = personal_dir / f"{report_id}.json"
+            report_file.write_text(
+                json.dumps(personal_data, ensure_ascii=False, indent=2),
+                encoding='utf-8'
+            )
+            
+            return True
+        except Exception as e:
+            logger.error(f"❌ 创建个人报告失败: {e}")
+            return False
+    
+    def get_personal_report(self, report_id: str) -> Optional[Dict[str, Any]]:
+        """获取个人报告"""
+        try:
+            personal_dir = self.storage_dir / "personal_reports"
+            report_file = personal_dir / f"{report_id}.json"
+            if not report_file.exists():
+                return None
+            
+            data = json.loads(report_file.read_text(encoding='utf-8'))
+            if 'created_at' in data:
+                data['created_at'] = datetime.fromisoformat(data['created_at'])
+            if 'updated_at' in data:
+                data['updated_at'] = datetime.fromisoformat(data['updated_at'])
+            
+            return data
+        except Exception as e:
+            logger.error(f"❌ 获取个人报告失败: {e}")
+            return None
+    
     def list_reports(self, page: int = 1, page_size: int = 20, 
                     chat_name: Optional[str] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
         try:

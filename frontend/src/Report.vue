@@ -74,15 +74,20 @@ const imageError = ref('')
  */
 const getRouteParams = () => {
   const path = window.location.pathname
-  // 尝试匹配 /report/{template}/{id}
-  let match = path.match(/\/report\/([^/]+)\/([^/]+)/)
+  // 尝试匹配 /personal-report/{template}/{id}
+  let match = path.match(/\/personal-report\/([^/]+)\/([^/]+)/)
   if (match) {
-    return { templateId: match[1], reportId: match[2] }
+    return { templateId: match[1], reportId: match[2], isPersonal: true }
+  }
+  // 尝试匹配 /report/{template}/{id}
+  match = path.match(/\/report\/([^/]+)\/([^/]+)/)
+  if (match) {
+    return { templateId: match[1], reportId: match[2], isPersonal: false }
   }
   // 尝试匹配 /report/{id}
   match = path.match(/\/report\/([^/]+)/)
   if (match) {
-    return { templateId: 'classic', reportId: match[1] }
+    return { templateId: 'classic', reportId: match[1], isPersonal: false }
   }
   return null
 }
@@ -99,6 +104,7 @@ const getReportId = () => {
  */
 const loadTemplate = async (templateId) => {
   try {
+    // 尝试加载模板，支持个人报告模板
     const module = await import(`./templates/${templateId}.vue`)
     templateComponent.value = module.default
   } catch (err) {
@@ -121,7 +127,15 @@ const loadReport = async () => {
       throw new Error('报告ID不存在')
     }
     
-    const { data } = await axios.get(`${API_BASE}/reports/${reportId}`)
+    const params = getRouteParams()
+    const isPersonal = params?.isPersonal || false
+    
+    // 根据类型选择不同的API端点
+    const apiEndpoint = isPersonal 
+      ? `${API_BASE}/personal-reports/${reportId}`
+      : `${API_BASE}/reports/${reportId}`
+    
+    const { data } = await axios.get(apiEndpoint)
     
     if (data.error) {
       throw new Error(data.error)
@@ -154,11 +168,17 @@ const generateImage = async () => {
     
     const params = getRouteParams()
     const templateId = params?.templateId || 'classic'
+    const isPersonal = params?.isPersonal || false
     
     console.log('🖼️ 请求后端生成图片...')
     
+    // 根据类型选择不同的API端点
+    const apiEndpoint = isPersonal
+      ? `${API_BASE}/personal-reports/${reportId}/generate-image`
+      : `${API_BASE}/reports/${reportId}/generate-image`
+    
     const { data } = await axios.post(
-      `${API_BASE}/reports/${reportId}/generate-image`,
+      apiEndpoint,
       {
         template: templateId,
         format: 'for_share',  // 分享版本
@@ -170,8 +190,13 @@ const generateImage = async () => {
       imageUrl.value = data.image_url
       
       // 自动触发下载
-      const chatName = report.value?.chat_name || '报告'
-      const fileName = `${chatName}_年度报告_${new Date().getTime()}.png`
+      const params = getRouteParams()
+      const isPersonal = params?.isPersonal || false
+      const name = isPersonal 
+        ? (report.value?.user_name || '用户')
+        : (report.value?.chat_name || '报告')
+      const reportType = isPersonal ? '个人年度报告' : '年度报告'
+      const fileName = `${name}_${reportType}_${new Date().getTime()}.png`
       const link = document.createElement('a')
       link.href = data.image_url
       link.download = fileName

@@ -109,6 +109,78 @@ class DatabaseService:
             if conn:
                 conn.close()
     
+    def create_personal_report(self, report_id: str, user_name: str, chat_name: str,
+                              report_data: Dict, user_id: str = 'anonymous') -> bool:
+        """保存个人报告到数据库"""
+        conn = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # 检查personal_reports表是否存在，如果不存在则创建
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS personal_reports (
+                    report_id VARCHAR(255) PRIMARY KEY,
+                    user_name VARCHAR(255) NOT NULL,
+                    chat_name VARCHAR(255) NOT NULL,
+                    user_id VARCHAR(255) DEFAULT 'anonymous',
+                    report_data TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """)
+            
+            sql = """
+                INSERT INTO personal_reports 
+                (report_id, user_name, chat_name, user_id, report_data)
+                VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                user_name = VALUES(user_name),
+                chat_name = VALUES(chat_name),
+                report_data = VALUES(report_data),
+                updated_at = CURRENT_TIMESTAMP
+            """
+            cursor.execute(sql, (
+                report_id,
+                user_name,
+                chat_name,
+                user_id,
+                json.dumps(report_data, ensure_ascii=False)
+            ))
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"创建个人报告失败: {e}")
+            if conn:
+                conn.rollback()
+            return False
+        finally:
+            if conn:
+                conn.close()
+    
+    def get_personal_report(self, report_id: str) -> Optional[Dict[str, Any]]:
+        """获取个人报告"""
+        conn = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
+            
+            sql = "SELECT * FROM personal_reports WHERE report_id = %s"
+            cursor.execute(sql, (report_id,))
+            result = cursor.fetchone()
+            
+            if result and result.get('report_data'):
+                result['report_data'] = json.loads(result['report_data'])
+            
+            return result
+        except Exception as e:
+            logger.error(f"获取个人报告失败: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
+    
     def get_report(self, report_id: str) -> Optional[Dict[str, Any]]:
         conn = None
         try:

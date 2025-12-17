@@ -37,6 +37,7 @@ import config
 import analyzer as analyzer_mod
 from image_generator import ImageGenerator, AIWordSelector
 from utils import load_json
+from personal_analyzer import PersonalAnalyzer
 
 from backend.db_service import DatabaseService
 from backend.json_storage import JSONStorageService
@@ -439,6 +440,82 @@ def upload_and_analyze():
         return jsonify({"error": f"分析失败: {exc}"}), 500
 
 
+@app.route("/api/personal-report", methods=["POST"])
+@limiter.limit(RATE_LIMIT_UPLOAD if SECURITY_ENABLED and RATE_LIMIT_UPLOAD else "1000000 per hour")
+def generate_personal_report():
+    """生成个人年度报告"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "未上传文件"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "未选择文件"}), 400
+        
+        target_name = request.form.get('target_name', '').strip()
+        if not target_name:
+            return jsonify({"error": "未指定要分析的用户名称"}), 400
+        
+        use_stopwords = request.form.get("use_stopwords", "false").lower() == "true"
+        
+        # 保存临时文件
+        base_dir = os.path.join(PROJECT_ROOT, "runtime_outputs")
+        temp_dir = os.path.join(base_dir, "temp")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        report_id = str(uuid.uuid4())
+        temp_path = os.path.join(temp_dir, f"{report_id}.json")
+        file.save(temp_path)
+        
+        try:
+            # 加载JSON数据
+            data = load_json(temp_path)
+            
+            # 创建个人分析器
+            analyzer = PersonalAnalyzer(data, target_name, use_stopwords=use_stopwords)
+            analyzer.analyze()
+            report = analyzer.export_json()
+            
+            # 保存到数据库
+            if db_service:
+                # 将个人报告数据转换为数据库格式
+                success = db_service.create_personal_report(
+                    report_id=report_id,
+                    user_name=report.get('user_name', target_name),
+                    chat_name=report.get('chat_name', '未知群聊'),
+                    report_data=report,
+                    user_id=get_or_create_user_id()
+                )
+                if not success:
+                    logger.warning(f"⚠️ 个人报告保存到数据库失败，但继续返回数据")
+            
+            # 清理临时文件
+            cleanup_temp_files(temp_path)
+            
+            return jsonify({
+                "success": True,
+                "report_id": report_id,
+                "report": report,
+                "report_url": f"/personal-report/{report_id}"
+            })
+            
+        except ValueError as e:
+            cleanup_temp_files(temp_path)
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            cleanup_temp_files(temp_path)
+            logger.error(f"❌ 个人报告生成失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({"error": f"分析失败: {str(e)}"}), 500
+            
+    except Exception as e:
+        logger.error(f"❌ 个人报告API错误: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"服务器错误: {str(e)}"}), 500
+
+
 @app.route("/api/finalize", methods=["POST"])
 @limiter.limit(RATE_LIMIT_FINALIZE if SECURITY_ENABLED and RATE_LIMIT_FINALIZE else "1000000 per hour")
 def finalize_report_endpoint():
@@ -635,6 +712,85 @@ def get_templates():
                 }
             ]
         })
+
+
+@app.route("/api/personal-reports/<report_id>", methods=["GET"])
+@limiter.limit(RATE_LIMIT_GET_REPORT if SECURITY_ENABLED and RATE_LIMIT_GET_REPORT else "1000000 per hour")
+def get_personal_report_api(report_id):
+    """获取个人报告"""
+    if not db_service:
+        return jsonify({"error": "数据库服务未初始化"}), 500
+    
+    try:
+        personal_report = db_service.get_personal_report(report_id)
+        if not personal_report:
+            return jsonify({"error": "个人报告不存在"}), 404
+        
+        report_data = personal_report.get('report_data', {})
+        return jsonify(report_data)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"获取失败: {exc}"}), 500
+
+
+@app.route("/api/personal-reports/<report_id>/generate-image", methods=["POST"])
+@limiter.limit(RATE_LIMIT_GENERATE_IMAGE if SECURITY_ENABLED and RATE_LIMIT_GENERATE_IMAGE else "1000000 per hour")
+def generate_personal_report_image(report_id):
+    """生成个人报告图片"""
+    if not db_service:
+        return jsonify({"error": "数据库服务未初始化"}), 500
+    
+    try:
+        data = request.get_json() or {}
+        template_id = data.get('template', 'personal-classic')
+        force_regenerate = data.get('force', False)
+        image_format = data.get('format', 'for_share')
+        
+        personal_report = db_service.get_personal_report(report_id)
+        if not personal_report:
+            return jsonify({"error": "个人报告不存在"}), 404
+        
+        cache_key = f"personal_{report_id}_{template_id}_{image_format}"
+        if not force_regenerate:
+            cached_image = db_service.get_cached_image(cache_key)
+            if cached_image:
+                logger.info(f"📦 返回缓存图片: {cache_key}")
+                return jsonify({
+                    "success": True,
+                    "image_url": cached_image['image_url'],
+                    "cached": True,
+                    "generated_at": str(cached_image['created_at'])
+                })
+        
+        logger.info(f"🖼️ 开始生成个人报告图片: {report_id} (模板: {template_id}, 格式: {image_format})")
+        
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+        report_url = f"{frontend_url}/personal-report/{template_id}/{report_id}"
+        
+        if image_format == 'for_share':
+            report_url += '?mode=share'
+        
+        image_data = asyncio.run(generate_image_with_playwright(report_url))
+        
+        if not image_data:
+            return jsonify({"error": "图片生成失败"}), 500
+        
+        image_url = db_service.save_image_cache(cache_key, image_data)
+        
+        logger.info(f"✅ 个人报告图片生成成功: {cache_key}")
+        
+        return jsonify({
+            "success": True,
+            "image_url": image_url,
+            "cached": False,
+            "generated_at": "now"
+        })
+        
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"生成失败: {exc}"}), 500
 
 
 @app.route("/api/reports/<report_id>", methods=["GET"])

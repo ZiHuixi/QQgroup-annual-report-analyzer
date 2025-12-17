@@ -16,6 +16,12 @@
         上传分析
       </button>
       <button 
+        :class="['tab', { active: activeTab === 'personal' }]" 
+        @click="activeTab = 'personal'"
+      >
+        个人报告
+      </button>
+      <button 
         :class="['tab', { active: activeTab === 'history' }]" 
         @click="activeTab = 'history'; loadReports()"
       >
@@ -299,6 +305,105 @@
         </div>
       </div>
     </div>
+
+    <!-- 个人报告页面 -->
+    <div v-if="activeTab === 'personal'" class="tab-content">
+      <div v-if="!personalReport" class="card">
+        <h2>个人年度报告</h2>
+        <p>上传群聊JSON文件，输入要分析的用户名称，生成该用户的个人年度报告</p>
+        
+        <div class="card" style="margin-top: 20px;">
+          <h3>时间范围设置</h3>
+          <div class="time-range-selector">
+            <div class="time-input-group">
+              <label>起始日期：</label>
+              <input 
+                type="date" 
+                v-model="personalStartDate" 
+                placeholder="留空表示不限制"
+              />
+            </div>
+            <div class="time-input-group">
+              <label>结束日期：</label>
+              <input 
+                type="date" 
+                v-model="personalEndDate" 
+                placeholder="留空表示不限制"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+          <label class="toggle-row">
+            <input type="checkbox" v-model="personalUseStopwords" />
+            <div>
+              <strong>使用停用词库（百度）</strong>
+              <p style="margin: 6px 0 0 0; color: #6e6e73;">过滤语气词、助词等常见停用词，减少噪声</p>
+            </div>
+          </label>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+          <h3>输入用户名称</h3>
+          <input 
+            type="text" 
+            v-model="targetUserName" 
+            placeholder="请输入要分析的用户名称（支持模糊匹配）"
+            style="width: 100%; padding: 12px; margin-top: 10px;"
+          />
+          <p style="margin-top: 8px; color: #6e6e73; font-size: 14px;">
+            💡 输入用户在群聊中显示的名称，系统会自动匹配
+          </p>
+        </div>
+
+        <div class="flex" style="margin-top: 20px;">
+          <input type="file" accept=".json" @change="onPersonalFileChange" />
+          <button :disabled="personalLoading || !personalFile || !targetUserName" @click="generatePersonalReport">
+            {{ personalLoading ? '⏳ 分析中...' : '生成个人报告' }}
+          </button>
+        </div>
+
+        <div v-if="personalError" class="error-box" style="margin-top: 20px;">
+          <p>{{ personalError }}</p>
+        </div>
+      </div>
+
+      <!-- 个人报告展示 -->
+      <div v-else class="personal-report-container">
+        <div class="card">
+          <h2>✅ 个人报告生成完成！</h2>
+          <div class="success-box">
+            <p>您的个人年度报告已成功生成并保存</p>
+            
+            <div class="info-box" style="margin-top: 15px;">
+              <div class="badge">报告ID：{{ personalReport.report_id }}</div>
+              <div class="badge">用户：{{ personalReport.user_name }}</div>
+              <div class="badge">群聊：{{ personalReport.chat_name }}</div>
+            </div>
+            
+            <div style="margin-top: 20px;">
+              <p style="margin-bottom: 10px; font-weight: 500;">📊 访问您的报告：</p>
+              <div class="url-display">
+                {{ getPersonalReportUrl() }}
+              </div>
+              <div class="flex" style="margin-top: 15px; gap: 10px;">
+                <button @click="openPersonalReport" class="primary">
+                  🔗 立即查看报告
+                </button>
+                <button @click="copyPersonalReportUrl">
+                  📋 复制链接
+                </button>
+              </div>
+            </div>
+
+            <div class="flex" style="margin-top: 30px;">
+              <button @click="personalReport = null; targetUserName = ''; personalFile = null">创建新报告</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     </div>
   </div>
 </template>
@@ -307,6 +412,7 @@
 import axios from 'axios'
 import { reactive, ref, computed, onMounted } from 'vue'
 import Report from './Report.vue'
+import PersonalReport from './PersonalReport.vue'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 const SITE_URL = window.location.origin
@@ -419,6 +525,16 @@ const totalWordPages = computed(() => {
 const reports = ref({ data: [], total: 0, page: 1, page_size: 20 })
 const searchQuery = ref('')
 
+// 个人报告相关
+const personalFile = ref(null)
+const personalLoading = ref(false)
+const personalError = ref('')
+const personalReport = ref(null)
+const targetUserName = ref('')
+const personalStartDate = ref('')
+const personalEndDate = ref('')
+const personalUseStopwords = ref(false)
+
 // 模板相关
 const availableTemplates = ref([])
 const selectedTemplate = ref('classic')
@@ -468,7 +584,8 @@ const copyTemplateUrl = async (templateId) => {
 
 // 判断是否为报告页面
 const isReportPage = computed(() => {
-  return window.location.pathname.startsWith('/report/')
+  return window.location.pathname.startsWith('/report/') || 
+         window.location.pathname.startsWith('/personal-report/')
 })
 
 // 计算报告URL
@@ -758,6 +875,78 @@ const formatDate = (dateStr) => {
 }
 
 // 页面加载时初始化
+// 个人报告相关方法
+const getPersonalReportUrl = () => {
+  if (!personalReport.value?.report_id) return ''
+  return `${SITE_URL}/personal-report/personal-classic/${personalReport.value.report_id}`
+}
+
+const openPersonalReport = () => {
+  if (!personalReport.value?.report_id) return
+  window.open(`/personal-report/personal-classic/${personalReport.value.report_id}`, '_blank')
+}
+
+const copyPersonalReportUrl = async () => {
+  const url = getPersonalReportUrl()
+  try {
+    await navigator.clipboard.writeText(url)
+    alert('链接已复制到剪贴板')
+  } catch (err) {
+    prompt('请手动复制链接：', url)
+  }
+}
+
+const onPersonalFileChange = (e) => {
+  personalFile.value = e.target.files[0] || null
+  personalError.value = ''
+}
+
+const generatePersonalReport = async () => {
+  if (!personalFile.value || !targetUserName.value) return
+  
+  personalLoading.value = true
+  personalError.value = ''
+  
+  try {
+    const form = new FormData()
+    form.append('file', personalFile.value)
+    form.append('target_name', targetUserName.value)
+    form.append('use_stopwords', personalUseStopwords.value ? 'true' : 'false')
+    
+    const response = await axios.post(`${API_BASE}/personal-report`, form, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'X-CSRFToken': csrfToken
+      },
+      timeout: 300000 // 5分钟超时
+    })
+    
+    if (response.data.success && response.data.report) {
+      console.log('✅ 个人报告数据:', response.data.report)
+      // 保存report_id和report_url
+      personalReport.value = {
+        ...response.data.report,
+        report_id: response.data.report_id,
+        report_url: response.data.report_url
+      }
+    } else {
+      console.error('❌ 报告生成失败:', response.data)
+      personalError.value = response.data.error || '生成报告失败'
+    }
+  } catch (err) {
+    console.error('生成个人报告失败:', err)
+    if (err.response?.data?.error) {
+      personalError.value = err.response.data.error
+    } else if (err.message.includes('timeout')) {
+      personalError.value = '请求超时，请稍后重试'
+    } else {
+      personalError.value = '生成报告失败: ' + (err.message || '未知错误')
+    }
+  } finally {
+    personalLoading.value = false
+  }
+}
+
 onMounted(async () => {
   await fetchCsrfToken()
   await fetchAIFeatures()
