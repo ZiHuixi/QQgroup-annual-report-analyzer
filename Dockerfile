@@ -45,6 +45,7 @@ RUN apt-get update && apt-get install -y \
     libxkbcommon0 \
     libxrandr2 \
     xdg-utils \
+    gcc\
     && rm -rf /var/lib/apt/lists/*
 
 # 复制后端依赖文件
